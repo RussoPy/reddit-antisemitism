@@ -3,7 +3,7 @@ import requests
 from dotenv import load_dotenv
 import re
 
-def get_openai_antisemitism_score(text, api_key=None, model="gpt-3.5-turbo"):
+def get_openai_antisemitism_score(text, api_key=None, model="gpt-4"):
     """
     Uses OpenAI API to rate antisemitism in the text from 0 (not antisemitic) to 1 (extremely antisemitic).
     Only considers antisemitism, not general hate.
@@ -16,9 +16,13 @@ def get_openai_antisemitism_score(text, api_key=None, model="gpt-3.5-turbo"):
     if not api_key:
         raise ValueError("OpenAI API key not set. Set OPENAI_API_KEY environment variable.")
     prompt = (
-        "Rate the following Reddit post for antisemitism on a scale from 0 (not antisemitic) to 1 (extremely antisemitic and super high). "
-        "Only consider antisemitism, not general hate. "
-        "Respond with only a number between 0 and 1.\n\nPost: " + text.strip()[:500]
+    "You are an expert in hate speech detection. "
+    "Your task is to analyze the following Reddit post for antisemitic content. "
+    "If the post contains antisemitic language, conspiracy theories, or harmful stereotypes about Jewish people, score it accordingly. "
+    "If the post is simply quoting a headline, news, or another person (using quotation marks), and does not endorse or support the content, do not flag it as antisemitic. "
+    "Treat both double quotes (\"\") and single quotes (') as indicators of quoted material. If the post contains text within either type of quotes, assume it may be a quotation and do not flag unless there is clear endorsement or agreement. "
+    "Return a score from 0.0 (not antisemitic) to 1.0 (extremely antisemitic), return only a number. "
+    f"\n\nReddit post:\n{text}\n"
     )
     headers = {
         "Authorization": f"Bearer {api_key}",

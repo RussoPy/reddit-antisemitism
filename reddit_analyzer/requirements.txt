@@ -1,0 +1,5 @@
+praw
+openai
+firebase-admin
+python-dotenv
+requests
