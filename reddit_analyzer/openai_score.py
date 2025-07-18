@@ -3,7 +3,7 @@ import requests
 from dotenv import load_dotenv
 import re
 
-def get_openai_antisemitism_score(text, api_key=None, model="gpt-4"):
+def get_openai_antisemitism_score(text, api_key=None, model="gpt-3.5-turbo"):
     """
     Uses OpenAI API to rate antisemitism in the text from 0 (not antisemitic) to 1 (extremely antisemitic).
     Only considers antisemitism, not general hate.
