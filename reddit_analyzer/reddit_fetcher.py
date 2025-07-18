@@ -69,8 +69,11 @@ def post_exists_in_firestore(db, post_id):
 @app.route('/run', methods=['POST'])
 def run_detector():
     try:
+        print("[LOG] /run endpoint triggered.")
         reddit = get_reddit_instance()
+        print("[LOG] Reddit instance initialized.")
         db = init_firebase()
+        print("[LOG] Firebase initialized.")
         from datetime import datetime, timedelta, timezone
         now = datetime.now(timezone.utc)
         two_months_ago = now - timedelta(days=60)
@@ -78,21 +81,29 @@ def run_detector():
         top_posts = []
         flagged_users = []
         for subreddit in SUBREDDITS:
+            print(f"[LOG] Processing subreddit: {subreddit}")
             for buzzword in BUZZWORDS:
+                print(f"[LOG] Buzzword: {buzzword}")
                 posts = fetch_posts(subreddit, buzzword, limit=5)
+                print(f"[LOG] Found {len(posts)} posts for buzzword '{buzzword}' in subreddit '{subreddit}'")
                 for post in posts:
+                    print(f"[LOG] Processing post ID: {post['post_id']}")
                     content = (post['title'] or "") + " " + (post['text'] or "")
                     if buzzword.lower() not in content.lower():
+                        print(f"[LOG] Buzzword '{buzzword}' not in post content. Skipping.")
                         continue
                     if post_exists_in_firestore(db, post['post_id']):
+                        print(f"[LOG] Post {post['post_id']} already exists in Firestore. Skipping.")
                         continue
                     text_for_model = (post['title'] or "") + "\n" + ((post['text'] or "")[:500])
                     hate_score = get_openai_antisemitism_score(text_for_model)
+                    print(f"[LOG] Hate score for post {post['post_id']}: {hate_score}")
                     post_with_score = post.copy()
                     post_with_score['hate_score'] = hate_score
                     top_posts.append(post_with_score)
                     if hate_score >= 0.7:
                         author_name = post['author']
+                        print(f"[LOG] Flagging user: {author_name}")
                         explanation = get_openai_antisemitism_explanation(text_for_model)
                         user_info = {
                             'author': author_name,
@@ -103,13 +114,14 @@ def run_detector():
                             'hate_score': hate_score,
                             'history': [],
                             'note': '',
-                            'explanation': explanation
+                            'explanation': explanation,
+                            'upload_date': datetime.now(timezone.utc).isoformat()  # Added upload time
                         }
                         try:
                             redditor = reddit.redditor(author_name)
                             submissions = []
                             flagged_history_count = 0
-                            for submission in redditor.submissions.new(limit=100):
+                            for submission in redditor.submissions.new(limit=20):
                                 post_time = datetime.fromtimestamp(submission.created_utc, timezone.utc)
                                 if post_time >= two_months_ago:
                                     hist_post = {
@@ -140,15 +152,19 @@ def run_detector():
                                 notes.append(f"Original score was {original_score:.2f}, increased to {user_info['hate_score']:.2f} due to {flagged_history_count} flagged history posts.")
                             user_info['notes'] = notes
                         except Exception as e:
+                            print(f"[LOG] Error fetching user history for {author_name}: {e}")
                             user_info['notes'] = [f"Could not fetch user history (private/new/no posts): {e}"]
                         flagged_users.append(user_info)
                         upload_flagged_user_to_firestore(db, user_info)
+                        print(f"[LOG] Uploaded flagged user {author_name} to Firestore.")
+        print("[LOG] Scan completed.")
         return jsonify({
             "top_posts": top_posts,
             "flagged_users": flagged_users,
             "status": "completed"
         })
     except Exception as e:
+        print(f"[ERROR] {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
