@@ -21,113 +21,11 @@ from dotenv import load_dotenv
 load_dotenv()  # Ensure .env is loaded before reading env vars
 
 # --- OpenAI API-based antisemitism scoring ---
-def get_openai_antisemitism_explanation(text, api_key=None, model="gpt-3.5-turbo"):
-    """
-    Uses OpenAI API to explain why the post is flagged as antisemitic.
-    Returns a short explanation string.
-    """
-    if not text or not text.strip():
-        return "No explanation available."
-    if api_key is None:
-        from dotenv import load_dotenv
-        load_dotenv()
-        api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OpenAI API key not set. Set OPENAI_API_KEY environment variable.")
-    prompt = (
-        "Explain in 1 very short sentence why the following Reddit post is antisemitic and flagged. "
-        "Focus on antisemitic language, stereotypes, or hate speech.\nPost: " + text.strip()[:500]
-    )
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "You are an expert in antisemitism detection."},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 100,
-        "temperature": 0.0
-    }
-    try:
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=30)
-        response.raise_for_status()
-        result = response.json()
-        answer = result["choices"][0]["message"]["content"].strip()
-        return answer
-    except Exception as e:
-        print(f"[DEBUG] OpenAI explanation request exception: {e}")
-        return "Explanation not available due to error."
-def get_openai_antisemitism_score(text, api_key=None, model="gpt-3.5-turbo"):
-    """
-    Uses OpenAI API to rate antisemitism in the text from 0 (not antisemitic) to 1 (extremely antisemitic).
-    Only considers antisemitism, not general hate.
-    """
-    if not text or not text.strip():
-        return 0.0
-    if api_key is None:
-        from dotenv import load_dotenv
-        load_dotenv()
-        api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OpenAI API key not set. Set OPENAI_API_KEY environment variable.")
-    prompt = (
-        "Rate the following Reddit post for antisemitism on a scale from 0 (not antisemitic) to 1 (extremely antisemitic and super high). "
-        "Only consider antisemitism, not general hate. "
-        "Respond with only a number between 0 and 1.\n\nPost: " + text.strip()[:500]
-    )
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "You are an expert in antisemitism detection."},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 10,
-        "temperature": 0.0
-    }
-    try:
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=30)
-        response.raise_for_status()
-        result = response.json()
-        answer = result["choices"][0]["message"]["content"].strip()
-        import re
-        match = re.search(r"(?<!\d)(0(\.\d+)?|1(\.0+)?)(?!\d)", answer)
-        if match:
-            score = float(match.group(0))
-            if score < 0: score = 0.0
-            if score > 1: score = 1.0
-            return score
-        else:
-            print(f"[DEBUG] Could not parse OpenAI response: '{answer}'")
-            return 0.0
-    except Exception as e:
-        print(f"[DEBUG] OpenAI API request exception: {e}")
-        return 0.0
+from openai_explanation import get_openai_antisemitism_explanation
+from openai_score import get_openai_antisemitism_score
 
 
-# Fill in your credentials here
-REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
-REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
-REDDIT_USER_AGENT = os.getenv("REDDIT_USER_AGENT")
-REDDIT_USERNAME = os.getenv("REDDIT_USERNAME")
-REDDIT_PASSWORD = os.getenv("REDDIT_PASSWORD")
-
-
-def get_reddit_instance():
-    reddit = praw.Reddit(
-        client_id=REDDIT_CLIENT_ID,
-        client_secret=REDDIT_CLIENT_SECRET,
-        user_agent=REDDIT_USER_AGENT,
-        username=REDDIT_USERNAME,
-        password=REDDIT_PASSWORD
-    )
-    return reddit
+from reddit_instance import get_reddit_instance
 
 
 def fetch_posts(subreddit_name, query, limit=10):
