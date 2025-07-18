@@ -26,6 +26,8 @@ from openai_score import get_openai_antisemitism_score
 
 
 from reddit_instance import get_reddit_instance
+from firebase_setup import init_firebase
+
 
 
 def fetch_posts(subreddit_name, query, limit=10):
@@ -45,6 +47,11 @@ def fetch_posts(subreddit_name, query, limit=10):
         })
     return posts
 
+def upload_flagged_user_to_firestore(db, user_info):
+    doc_id = user_info['author']
+    doc_ref = db.collection('flagged_users').document(doc_id)
+    doc_ref.set(user_info)
+
 
 if __name__ == "__main__":
     # Load environment variables from .env file if present
@@ -55,6 +62,7 @@ if __name__ == "__main__":
         print()
         top_posts = []  # List of dicts: each with post info and hate_score
         flagged_users = []  # List to store flagged user histories
+        db = init_firebase()
         from datetime import datetime, timedelta, timezone
         now = datetime.now(timezone.utc)
         two_months_ago = now - timedelta(days=60)
@@ -122,6 +130,7 @@ if __name__ == "__main__":
                         except Exception as e:
                             user_info['note'] = f"Could not fetch user history (private/new/no posts): {e}"
                         flagged_users.append(user_info)
+                        upload_flagged_user_to_firestore(db, user_info)
                         print(f"  [FLAGGED] User post history extracted. Posts in last 2 months: {len(user_info['history'])}")
                         print(f"  Explanation: {explanation}")
                         if user_info['note']:

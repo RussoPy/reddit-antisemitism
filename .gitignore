@@ -73,3 +73,6 @@ Thumbs.db
 
 # Do not ignore .env
 .env
+
+# Firebase credentials
+firebase_service_account.json
