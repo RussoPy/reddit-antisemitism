@@ -30,20 +30,18 @@ def fetch_posts(subreddit_name, query, limit=15):
     reddit = get_reddit_instance()
     subreddit = reddit.subreddit(subreddit_name)
     posts = []
-    # Fetch newest posts and filter by buzzword
-    for submission in subreddit.new(limit=limit):
-        content = (submission.title or "") + " " + (submission.selftext or "")
-        if query.lower() in content.lower():
-            posts.append({
-                "post_id": submission.id,
-                "author": str(submission.author),
-                "title": submission.title,
-                "text": submission.selftext,
-                "url": submission.url,
-                "permalink": f"https://reddit.com{submission.permalink}",
-                "subreddit": subreddit_name,
-                "created_utc": submission.created_utc
-            })
+    # Search for posts using the buzzword (like before)
+    for submission in subreddit.search(query, limit=limit):
+        posts.append({
+            "post_id": submission.id,
+            "author": str(submission.author),
+            "title": submission.title,
+            "text": submission.selftext,
+            "url": submission.url,
+            "permalink": f"https://reddit.com{submission.permalink}",
+            "subreddit": subreddit_name,
+            "created_utc": submission.created_utc
+        })
     return posts
 
 def upload_flagged_user_to_firestore(db, user_info):
