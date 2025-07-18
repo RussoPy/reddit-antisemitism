@@ -1,3 +1,16 @@
+"""
+reddit_fetcher.py
+-----------------
+Main script for detecting antisemitic Reddit posts, scoring them with OpenAI, and uploading flagged users and their post histories to Firebase Firestore.
+
+Functions:
+- fetch_posts: Fetch posts from a subreddit matching a buzzword.
+- upload_flagged_user_to_firestore: Upload flagged user and post history to Firestore.
+- post_exists_in_firestore: Check if a post already exists in Firestore.
+
+Entry point:
+Iterates through subreddits and buzzwords, scores posts, and uploads flagged users.
+"""
 BUZZWORDS = [
     "jews", "zionist", "holocaust", "antisemitic", "israel",
     "rothschild", "protocols of zion",
@@ -26,10 +39,18 @@ from firebase_setup import init_firebase
 
 
 def fetch_posts(subreddit_name, query, limit=15):
+    """
+    Fetch posts from a subreddit matching a buzzword.
+    Args:
+        subreddit_name (str): Name of the subreddit.
+        query (str): Buzzword to search for.
+        limit (int): Number of posts to fetch.
+    Returns:
+        list: List of post dictionaries.
+    """
     reddit = get_reddit_instance()
     subreddit = reddit.subreddit(subreddit_name)
     posts = []
-    # Search for posts using the buzzword (like before)
     for submission in subreddit.search(query, limit=limit):
         posts.append({
             "post_id": submission.id,
@@ -44,17 +65,29 @@ def fetch_posts(subreddit_name, query, limit=15):
     return posts
 
 def upload_flagged_user_to_firestore(db, user_info):
+    """
+    Upload a flagged user and their post history to Firestore.
+    Adds upload date to user and each post in history.
+    Args:
+        db: Firestore database client.
+        user_info (dict): User info and post history.
+    """
     from datetime import datetime
     doc_id = user_info['author']
-    # Add upload date to user_info
     user_info['upload_date'] = datetime.utcnow().isoformat()
-    # Add upload date to each post in history
     for post in user_info.get('history', []):
         post['upload_date'] = datetime.utcnow().isoformat()
     doc_ref = db.collection('flagged_users').document(doc_id)
     doc_ref.set(user_info)
 def post_exists_in_firestore(db, post_id):
-    # Search all flagged_users for this post_id in their flagged_post_id field
+    """
+    Check if a post already exists in Firestore.
+    Args:
+        db: Firestore database client.
+        post_id (str): Reddit post ID.
+    Returns:
+        bool: True if post exists, False otherwise.
+    """
     users_ref = db.collection('flagged_users')
     query = users_ref.where('flagged_post_id', '==', post_id).limit(1)
     results = query.stream()
@@ -64,9 +97,14 @@ def post_exists_in_firestore(db, post_id):
 
 
 # Main script logic for local execution
+
+# Main script logic for local execution
 if __name__ == "__main__":
+    print("Starting Reddit antisemitism scan...")
     reddit = get_reddit_instance()
+    print("Reddit instance initialized.")
     db = init_firebase()
+    print("Firebase initialized.")
     from datetime import datetime, timedelta, timezone
     now = datetime.now(timezone.utc)
     two_months_ago = now - timedelta(days=60)
@@ -74,29 +112,32 @@ if __name__ == "__main__":
     top_posts = []
     flagged_users = []
     for subreddit in SUBREDDITS:
-        print(f"Processing subreddit: {subreddit}")
+        print()
+        print(f"=== Subreddit: {subreddit} ===")
         for buzzword in BUZZWORDS:
-            print(f"Buzzword: {buzzword}")
+            print()
+            print(f"  Buzzword: '{buzzword}'")
             posts = fetch_posts(subreddit, buzzword, limit=5)
-            print(f"Found {len(posts)} posts for buzzword '{buzzword}' in subreddit '{subreddit}'")
+            print(f"    Found {len(posts)} posts for buzzword '{buzzword}'")
             for post in posts:
-                print(f"Processing post ID: {post['post_id']}")
+                print()
+                print(f"    Title: {post['title']}")
+                print(f"    Post ID: {post['post_id']}")
                 content = (post['title'] or "") + " " + (post['text'] or "")
                 if buzzword.lower() not in content.lower():
-                    print(f"Buzzword '{buzzword}' not in post content. Skipping.")
+                    print(f"      [SKIP] Buzzword not in post content.")
                     continue
                 if post_exists_in_firestore(db, post['post_id']):
-                    print(f"Post {post['post_id']} already exists in Firestore. Skipping.")
+                    print(f"      [SKIP] Post already exists in Firestore.")
                     continue
                 text_for_model = (post['title'] or "") + "\n" + ((post['text'] or "")[:500])
                 hate_score = get_openai_antisemitism_score(text_for_model)
-                print(f"Hate score for post {post['post_id']}: {hate_score}")
+                print(f"      Hate Score: {hate_score}")
                 post_with_score = post.copy()
                 post_with_score['hate_score'] = hate_score
                 top_posts.append(post_with_score)
                 if hate_score >= 0.7:
                     author_name = post['author']
-                    print(f"Flagging user: {author_name}")
                     explanation = get_openai_antisemitism_explanation(text_for_model)
                     user_info = {
                         'author': author_name,
@@ -145,12 +186,26 @@ if __name__ == "__main__":
                             notes.append(f"Original score was {original_score:.2f}, increased to {user_info['hate_score']:.2f} due to {flagged_history_count} flagged history posts.")
                         user_info['notes'] = notes
                     except Exception as e:
-                        print(f"Error fetching user history for {author_name}: {e}")
+                        print(f"      Error fetching user history: {e}")
                         user_info['notes'] = [f"Could not fetch user history (private/new/no posts): {e}"]
                     flagged_users.append(user_info)
                     upload_flagged_user_to_firestore(db, user_info)
-                    print(f"Uploaded flagged user {author_name} to Firestore.")
-    print("Scan completed.")
+                    print(f"- Title: {user_info['flagged_post_title']}")
+                    print(f"  Author: {user_info['author']}")
+                    if user_info['flagged_post_text']:
+                        print(f"  Text: {user_info['flagged_post_text'][:100]}{'...' if len(user_info['flagged_post_text']) > 100 else ''}")
+                    else:
+                        print(f"  Link: {user_info['flagged_post_permalink']}")
+                    print(f"  Hate Score: {user_info['hate_score']:.2f}")
+                    print(f"  Post ID: {user_info['flagged_post_id']}")
+                    print(f"  Time: {user_info['upload_date']}")
+                    print(f"  Reddit Link: {user_info['flagged_post_permalink']}")
+                    print(f"  Reason: {user_info['explanation']}")
+                    if isinstance(user_info['notes'], list):
+                        for note in user_info['notes']:
+                            print(f"  Note: {note}")
+                    elif user_info.get('note'):
+                        print(f"  Note: {user_info['note']}")
+                    print()
+    print("\nScan completed.")
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))

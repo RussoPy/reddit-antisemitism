@@ -3,7 +3,8 @@ from firebase_admin import credentials, firestore
 import os
 
 # Use FIREBASE_CREDENTIALS env variable for service account path
-SERVICE_ACCOUNT_PATH = os.getenv("FIREBASE_CREDENTIALS")
+import os
+SERVICE_ACCOUNT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "firebase_service_account.json")
 
 def init_firebase():
     if not firebase_admin._apps:
