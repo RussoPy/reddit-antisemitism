@@ -26,7 +26,7 @@ from firebase_setup import init_firebase
 
 app = Flask(__name__)
 
-def fetch_posts(subreddit_name, query, limit=3):
+def fetch_posts(subreddit_name, query, limit=15):
     reddit = get_reddit_instance()
     subreddit = reddit.subreddit(subreddit_name)
     posts = []
