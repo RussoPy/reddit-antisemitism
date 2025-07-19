@@ -18,6 +18,8 @@ def get_openai_antisemitism_score(text, api_key=None, model="gpt-3.5-turbo"):
     prompt = (
     "You are an expert in hate speech detection. "
     "Your task is to analyze the following Reddit post for antisemitic content. "
+    "if you are not sure about any context or suspect it is a quote, give it only an extra 0.1 score for the general score"
+    "if there several hate speech elements, add them up to the final score with a bonus, but do not multiply them. "
     "If the post contains antisemitic language, conspiracy theories, or harmful stereotypes about Jewish people, score it accordingly. "
     "If the post is simply quoting a headline, news, or another person (using quotation marks), and does not endorse or support the content, do not flag it as antisemitic. "
     "Treat both double quotes (\"\") and single quotes (') as indicators of quoted material. If the post contains text within either type of quotes, assume it may be a quotation and do not flag unless there is clear endorsement or agreement. "
