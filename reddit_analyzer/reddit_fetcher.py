@@ -117,28 +117,27 @@ if __name__ == "__main__":
         for buzzword in BUZZWORDS:
             print()
             print(f"  Buzzword: '{buzzword}'")
-            posts = fetch_posts(subreddit, buzzword, limit=5)
+            posts = fetch_posts(subreddit, buzzword, limit=15)
             print(f"    Found {len(posts)} posts for buzzword '{buzzword}'")
             for post in posts:
-                print()
-                print(f"    Title: {post['title']}")
-                print(f"    Post ID: {post['post_id']}")
-                content = (post['title'] or "") + " " + (post['text'] or "")
-                if buzzword.lower() not in content.lower():
-                    print(f"      [SKIP] Buzzword not in post content.")
-                    continue
+                # Print required log for every post
                 if post_exists_in_firestore(db, post['post_id']):
-                    print(f"      [SKIP] Post already exists in Firestore.")
+                    print(f"[SKIP] Post already exists in Firestore. ID: {post['post_id']} | Title: {post['title']}")
                     continue
                 text_for_model = (post['title'] or "") + "\n" + ((post['text'] or "")[:500])
                 hate_score = get_openai_antisemitism_score(text_for_model)
-                print(f"      Hate Score: {hate_score}")
-                post_with_score = post.copy()
-                post_with_score['hate_score'] = hate_score
-                top_posts.append(post_with_score)
+                print(f"Title: {post['title']}")
+                print(f"Post ID: {post['post_id']}")
+                print(f"Text: {(post['text'] or '')[:100]}{'...' if post['text'] and len(post['text']) > 100 else ''}")
+                print(f"Hate Score Given: {hate_score:.2f}")
+                print(f"Reddit Link: {post['permalink']}")
+                reason = ''
+                note = ''
+                explanation = ''
                 if hate_score >= 0.7:
                     author_name = post['author']
                     explanation = get_openai_antisemitism_explanation(text_for_model)
+                    reason = explanation
                     user_info = {
                         'author': author_name,
                         'flagged_post_id': post['post_id'],
@@ -185,27 +184,14 @@ if __name__ == "__main__":
                             user_info['hate_score'] = min(user_info['hate_score'] + 0.1, 1.0)
                             notes.append(f"Original score was {original_score:.2f}, increased to {user_info['hate_score']:.2f} due to {flagged_history_count} flagged history posts.")
                         user_info['notes'] = notes
+                        note = '; '.join(notes)
                     except Exception as e:
-                        print(f"      Error fetching user history: {e}")
-                        user_info['notes'] = [f"Could not fetch user history (private/new/no posts): {e}"]
+                        note = f"Could not fetch user history (private/new/no posts): {e}"
+                        user_info['notes'] = [note]
                     flagged_users.append(user_info)
                     upload_flagged_user_to_firestore(db, user_info)
-                    print(f"- Title: {user_info['flagged_post_title']}")
-                    print(f"  Author: {user_info['author']}")
-                    if user_info['flagged_post_text']:
-                        print(f"  Text: {user_info['flagged_post_text'][:100]}{'...' if len(user_info['flagged_post_text']) > 100 else ''}")
-                    else:
-                        print(f"  Link: {user_info['flagged_post_permalink']}")
-                    print(f"  Hate Score: {user_info['hate_score']:.2f}")
-                    print(f"  Post ID: {user_info['flagged_post_id']}")
-                    print(f"  Time: {user_info['upload_date']}")
-                    print(f"  Reddit Link: {user_info['flagged_post_permalink']}")
-                    print(f"  Reason: {user_info['explanation']}")
-                    if isinstance(user_info['notes'], list):
-                        for note in user_info['notes']:
-                            print(f"  Note: {note}")
-                    elif user_info.get('note'):
-                        print(f"  Note: {user_info['note']}")
-                    print()
+                print(f"Reason: {reason}")
+                print(f"Note: {note}")
+                print()
     print("\nScan completed.")
 
