@@ -16,7 +16,7 @@ Detects antisemitic Reddit posts using OpenAI and saves flagged users/posts to F
 
 ## What It Does
 - Scans Reddit for antisemitic content
-- Scores posts with OpenAI
-- Saves flagged users and their post history to Firestore
+- Scores posts with AI
+- Saves flagged users and their post history to DB
 
 Deployable to Render or similar cloud platforms.
